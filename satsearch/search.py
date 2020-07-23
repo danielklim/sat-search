@@ -64,13 +64,15 @@ class Search(object):
         logger.debug(f"Found results: {json.dumps(results)}")
         if 'context' in results:
             return results['context']['matched']
+        elif 'meta' in results and 'found' in results['meta']:
+            return results['meta']['found']
         return 0
 
     @classmethod
     def query(cls, url=urljoin(API_URL, 'search'),  headers=None, **kwargs):
         """ Get request """
         logger.debug('Query URL: %s, Body: %s' % (url, json.dumps(kwargs)))
-        response = requests.post(url, data=json.dumps(kwargs), headers=headers)
+        response = requests.post(url, json=kwargs, headers=headers)
         # API error
         if response.status_code != 200:
             raise SatSearchError(response.text)
@@ -86,10 +88,19 @@ class Search(object):
         _limit = 500
 
         items = []
-        found = self.found(headers=headers)
-        if found > limit:
-            logger.warning('There are more items found (%s) than the limit (%s) provided.' % (found, limit))
-        maxitems = min(found, limit)
+        found = self.found()
+
+        # depending on ES version, found structure different
+        if type(found) is dict:
+            n_found = found['value']
+        elif type(found) is int:
+            n_found = found
+        else:
+            raise Error('Unhandled found return type', found)
+
+        if n_found > limit:
+            logger.warning('There are more items found (%s) than the limit (%s) provided.' % (n_found, limit))
+        maxitems = min(n_found, limit)
         kwargs = {
             'page': 1,
             'limit': min(_limit, maxitems)
